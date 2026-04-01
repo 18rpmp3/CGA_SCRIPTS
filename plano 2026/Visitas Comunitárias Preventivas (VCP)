@@ -1,0 +1,93 @@
+/*---------------------------------------------------------------------------------------------------------------------------------------------------
+ *************************************************** Visitas Comunitárias Preventivas(VCP)  ********************************************************
+ 
+ * O indicador tem por objetivo aferir o número de visitas comunitárias preventivas realizadas pelas Unidades e Frações com a finalidade de orientar 
+ * os cidadãos quanto à adoção de medidas de autoproteção e transmitir informações relevantes sobre a atuação da PMMG
+ ---------------------------------------------------------------------------------------------------------------------------------------------------*/
+SELECT  OCO.numero_ocorrencia,                                      -- Número da ocorrência 
+OCO.natureza_codigo,                                         -- Código da natureza da ocorrência
+OCO.natureza_descricao,                                      -- Descrição da natureza da ocorrência
+CASE
+            WHEN OCO.codigo_municipio IN (310160 , 310190 , 310200 , 310260 , 310410 , 310430 , 310530 , 310760 , 310840 , 310950 , 311030 , 311100 , 311130 , 311160 , 311240 , 311280 , 311440 , 311470 , 311510 , 311640 , 311710 , 312120 , 312240 , 312340 , 312520 , 312630 , 312830 , 312870 , 312970 , 312990 , 313150 , 313290 , 313375 , 313480 , 313690 , 313900 , 314300 , 314320 , 314410 , 314510 , 314720 , 314790 , 315150 , 315170 , 315180 , 315290 , 315920 , 316220 , 316294 , 316390 , 316430 , 316470 , 316510 , 316690 , 317060) THEN '18 RPM'	      
+    END AS RPM_2025_AREA,
+CASE    WHEN OCO.codigo_municipio in (310190,311240,311280,311510,311640,312120,312340,312970,313375,314790,315150,315290,316220,316294,316430,317060) THEN '12 BPM'
+        WHEN OCO.codigo_municipio in (310260,310530,310840,310950,311030,311100,312240,312990,313150,315180,315920) THEN '29 BPM'
+        WHEN OCO.codigo_municipio in (310410,310760,312830,312870,313290,313690,314300,314320,314410,314510,316390,316470,316510,312630,313480) THEN '43 BPM'
+        WHEN OCO.codigo_municipio in (310160,310200,310430,311130,311160,311440,311470,311710,312520,313900,314720,315170,316690) THEN '64 BPM'
+        ELSE 'OUTROS'
+    END AS UEOP_2025_AREA,
+LO.codigo_unidade_area,										-- Código da unidade militar da área
+LO.unidade_area_militar_nome,                                -- Nome da unidade militar da área
+OCO.unidade_responsavel_registro_codigo,                      -- Código da unidade que registrou a ocorrência
+OCO.unidade_responsavel_registro_nome,                        -- Nome da unidade que registrou a ocorrência
+SPLIT_PART(OCO.unidade_responsavel_registro_nome,'/',-1) RPM_REGISTRO, 
+SPLIT_PART(OCO.unidade_responsavel_registro_nome,'/',-2) UEOP_REGISTRO, 
+CASE 																			-- se o território é Urbano ou Rural segundo o IBGE
+    	WHEN OCO.pais_codigo <> 1 AND OCO.ocorrencia_uf IS NULL THEN 'Outro_Pais'  	-- trata erro - ocorrencia de fora do Brasil
+		WHEN OCO.ocorrencia_uf <> 'MG' THEN 'Outra_UF'								-- trata erro - ocorrencia de fora de MG
+    	WHEN OCO.numero_latitude IS NULL THEN 'Invalido'							-- trata erro - ocorrencia sem latitude
+        WHEN geo.situacao_codigo = 9 THEN 'Agua'									-- trata erro - ocorrencia dentro de curso d'água
+       	WHEN geo.situacao_zona IS NULL THEN 'Erro_Processamento'					-- checa se restou alguma ocorrencia com erro
+    	ELSE geo.situacao_zona
+END AS situacao_zona,  
+CAST(OCO.codigo_municipio AS INTEGER) AS COD_MUNICIPIO,                        -- Converte o código do município para número inteiro
+OCO.nome_municipio,                                           -- Nome do município da ocorrência
+OCO.tipo_logradouro_descricao,                                -- Tipo do logradouro (Rua, Avenida, etc)
+OCO.logradouro_nome,                                          -- Nome do logradouro
+OCO.numero_endereco,                                          -- Número do endereço
+OCO.nome_bairro,                                              -- Nome do bairro
+OCO.ocorrencia_uf,                                            -- Estado da ocorrência
+OCO.numero_latitude,                                          -- Latitude da localização
+OCO.numero_longitude,                                         -- Longitude da localização
+--OCO.digitador_matricula,
+--OCO.digitador_cargo_efetivo,
+--OCO.digitador_nome,
+CONCAT(
+    SUBSTR(CAST(OCO.data_hora_fato AS STRING), 9, 2), '/',  -- Dia (posições 9-10)
+    SUBSTR(CAST(OCO.data_hora_fato AS STRING), 6, 2), '/',  -- Mês (posições 6-7)
+    SUBSTR(CAST(OCO.data_hora_fato AS STRING), 1, 4), ' ',  -- Ano (posições 1-4)
+    SUBSTR(CAST(OCO.data_hora_fato AS STRING), 12, 8)       -- Hora (posições 12-19)
+  ) AS data_hora_fato,                   -- Converte a data/hora do fato para o padrão brasileiro
+YEAR(OCO.data_hora_fato) AS ano,                           -- Ano do fato
+MONTH(OCO.data_hora_fato) AS mes,                          -- Mês do fato
+OCO.nome_tipo_relatorio,                                   -- Tipo do relatório
+OCO.digitador_sigla_orgao,                                  -- Sigla do órgão que registrou
+geo.latitude_sirgas2000,				-- reprojeção da latitude de SAD69 para SIRGAS2000
+geo.longitude_sirgas2000				-- reprojeção da longitude de SAD69 para SIRGAS2000
+FROM db_bisp_reds_reporting.tb_ocorrencia OCO -- Tabela principal ( tabela ocorrencia)
+LEFT JOIN db_bisp_reds_master.tb_local_unidade_area_pmmg LO ON OCO.id_local = LO.id_local
+LEFT JOIN db_bisp_reds_master.tb_ocorrencia_setores_geodata AS geo ON OCO.numero_ocorrencia = geo.numero_ocorrencia AND OCO.ocorrencia_uf = 'MG'	-- Tabela de apoio que compara as lat/long com os setores IBGE		
+WHERE 1 = 1   -- Condição sempre verdadeira que facilita adicionar ou remover condições durante o desenvolvimento
+AND EXISTS (                            
+    SELECT 1                                                                           -- Seleciona apenas um valor constante (otimização de performance)
+    FROM db_bisp_reds_reporting.tb_envolvido_ocorrencia envolvido                      -- Tabela que contém informações dos envolvidos nas ocorrências
+    WHERE envolvido.numero_ocorrencia = OCO.numero_ocorrencia                          -- Correlaciona os envolvidos com a ocorrência principal
+    AND (
+        envolvido.numero_cpf_cnpj IS NOT NULL                                          -- Filtra envolvidos que possuem CPF/CNPJ preenchido
+        OR (
+            envolvido.tipo_documento_codigo = '0801'                                   -- OU filtra por envolvidos com tipo de documento específico (RG)
+            AND envolvido.numero_documento_id IS NOT NULL                              -- E que tenham um número de documento de identificação preenchido
+        )
+    )
+) -- Verifica a existência de pelo menos um registro na subconsulta, garantindo que há ao menos envolvido cadastrado, com preenchimento do campo CPF ou RG
+AND OCO.data_hora_fato BETWEEN '2025-01-01 00:00:00.000' AND '2026-12-31 23:59:59.000' -- Filtra ocorrências por período específico (de janeiro/2024 até fevereiro/2025)
+AND (
+    (OCO.natureza_codigo = 'A21000' AND OCO.data_hora_fato BETWEEN '2025-01-01 00:00:00.000' AND '2025-07-31 23:59:59.000')
+    OR OCO.natureza_codigo = 'A21007'
+    ) -- Considera ocorrências com natureza A21007 em qualquer data, e A21000 apenas se estiver no intervalo entre 01/01/2025 e 31/07/2025
+AND OCO.ocorrencia_uf = 'MG'                                                           -- Filtra ocorrências do estado de Minas Gerais
+AND OCO.digitador_sigla_orgao = 'PM'                                                   -- Filtra ocorrências registradas pela Polícia Militar
+AND OCO.unidade_responsavel_registro_nome NOT LIKE '%IND PE%'
+AND OCO.unidade_responsavel_registro_nome NOT LIKE '%PVD%'
+AND (
+    OCO.unidade_responsavel_registro_nome NOT REGEXP '/[A-Za-z]'
+    OR OCO.unidade_responsavel_registro_nome LIKE '%/PEL TM%'
+)
+AND (
+    OCO.unidade_responsavel_registro_nome REGEXP '^(SG|PEL|GP)'
+    OR OCO.unidade_responsavel_registro_nome REGEXP '^[^A-Za-z]'
+) -- Filtra apenas unidades com responsabilidade territorial. 
+AND OCO.nome_tipo_relatorio IN ('BOS', 'BOS AMPLO')                                    -- Filtra ocorrências cujo tipo de relatório é BOS ou BOS AMPLO
+AND OCO.ind_estado IN ('F','R')                                                               -- Filtra ocorrências com indicador de estado 'F' (Fechado) e R(Pendente de Recibo)
+AND OCO.unidade_responsavel_registro_nome LIKE '%/18 RPM%'   -- FILTRE PELO NOME DA UNIDADE RESPONSÁVEL PELO REGISTRO 
+ORDER BY OCO.numero_ocorrencia
