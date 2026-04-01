@@ -1,0 +1,75 @@
+/*----------------------------------------------------------------------------------------------------------------------------------------------
+ ********************************Crimes Violentos (CV) PLANO TATICO -  ************************************
+
+ * O indicador tem por objetivo aferir o número de visitas tranquilizadoras realizadas pelas Unidades e Frações às vítimas de crimes violentos,
+ *  visando: orientar os cidadãos quanto à adoção de medidas de autoproteção; prevenir a revitimização; aumentar a sensação de segurança; 
+ * e buscar informações sobre a prática criminosa de forma a aperfeiçoar o planejamento de ações e operações preventivas e repressivas.
+ ----------------------------------------------------------------------------------------------------------------------------------------------*/
+SELECT OCO.numero_ocorrencia,   -- Número da ocorrência                                      
+OCO.natureza_codigo,                                         -- Código da natureza da ocorrência
+OCO.natureza_descricao,                                      -- Descrição da natureza da ocorrência
+    CASE
+           WHEN OCO.codigo_municipio IN (310160 , 310190 , 310200 , 310260 , 310410 , 310430 , 310530 , 310760 , 310840 , 310950 , 311030 , 311100 , 311130 , 311160 , 311240 , 311280 , 311440 , 311470 , 311510 , 311640 , 311710 , 312120 , 312240 , 312340 , 312520 , 312630 , 312830 , 312870 , 312970 , 312990 , 313150 , 313290 , 313375 , 313480 , 313690 , 313900 , 314300 , 314320 , 314410 , 314510 , 314720 , 314790 , 315150 , 315170 , 315180 , 315290 , 315920 , 316220 , 316294 , 316390 , 316430 , 316470 , 316510 , 316690 , 317060) THEN '18 RPM'		       
+    END AS RPM_2025_AREA,
+CASE    WHEN OCO.codigo_municipio in (310190,311240,311280,311510,311640,312120,312340,312970,313375,314790,315150,315290,316220,316294,316430,317060) THEN '12 BPM'
+        WHEN OCO.codigo_municipio in (310260,310530,310840,310950,311030,311100,312240,312990,313150,315180,315920) THEN '29 BPM'
+        WHEN OCO.codigo_municipio in (310410,310760,312830,312870,313290,313690,314300,314320,314410,314510,316390,316470,316510,312630,313480) THEN '43 BPM'
+        WHEN OCO.codigo_municipio in (310160,310200,310430,311130,311160,311440,311470,311710,312520,313900,314720,315170,316690) THEN '64 BPM'
+        ELSE 'OUTROS'
+    END AS UEOP_2025_AREA,
+LO.codigo_unidade_area,										-- Código da unidade militar da área
+LO.unidade_area_militar_nome,                                -- Nome da unidade militar da área
+OCO.unidade_responsavel_registro_codigo,                      -- Código da unidade que registrou a ocorrência
+OCO.unidade_responsavel_registro_nome,                        -- Nome da unidade que registrou a ocorrência
+SPLIT_PART(OCO.unidade_responsavel_registro_nome,'/',-1) RPM_REGISTRO, 
+SPLIT_PART(OCO.unidade_responsavel_registro_nome,'/',-2) UEOP_REGISTRO, 
+CASE 																			-- se o território é Urbano ou Rural segundo o IBGE
+    	WHEN OCO.pais_codigo <> 1 AND OCO.ocorrencia_uf IS NULL THEN 'Outro_Pais'  	-- trata erro - ocorrencia de fora do Brasil
+		WHEN OCO.ocorrencia_uf <> 'MG' THEN 'Outra_UF'								-- trata erro - ocorrencia de fora de MG
+    	WHEN OCO.numero_latitude IS NULL THEN 'Invalido'							-- trata erro - ocorrencia sem latitude
+        WHEN geo.situacao_codigo = 9 THEN 'Agua'									-- trata erro - ocorrencia dentro de curso d'água
+       	WHEN geo.situacao_zona IS NULL THEN 'Erro_Processamento'					-- checa se restou alguma ocorrencia com erro
+    	ELSE geo.situacao_zona
+END AS situacao_zona,  
+CAST(OCO.codigo_municipio AS INTEGER) codigo_municipio,                        -- Converte o código do município para número inteiro
+OCO.nome_municipio,                                           -- Nome do município da ocorrência
+OCO.tipo_logradouro_descricao,                                -- Tipo do logradouro (Rua, Avenida, etc)
+OCO.logradouro_nome,                                          -- Nome do logradouro
+OCO.numero_endereco,                                          -- Número do endereço
+OCO.nome_bairro,                                              -- Nome do bairro
+OCO.ocorrencia_uf,                                            -- Estado da ocorrência
+OCO.numero_latitude,                                          -- Latitude da localização
+OCO.numero_longitude,                                         -- Longitude da localização
+ CONCAT(
+    SUBSTR(CAST(OCO.data_hora_fato AS STRING), 9, 2), '/',  -- Dia (posições 9-10)
+    SUBSTR(CAST(OCO.data_hora_fato AS STRING), 6, 2), '/',  -- Mês (posições 6-7)
+    SUBSTR(CAST(OCO.data_hora_fato AS STRING), 1, 4), ' ',  -- Ano (posições 1-4)
+    SUBSTR(CAST(OCO.data_hora_fato AS STRING), 12, 8)       -- Hora (posições 12-19)
+  ) AS data_hora_fato,                   -- Converte a data/hora do fato para o padrão brasileiro
+YEAR(OCO.data_hora_fato) AS ano,                           -- Ano do fato
+MONTH(OCO.data_hora_fato) AS mes,                          -- Mês do fato
+OCO.nome_tipo_relatorio,                                   -- Tipo do relatório
+OCO.digitador_sigla_orgao,                                  -- Sigla do órgão que registrou
+geo.latitude_sirgas2000,				-- reprojeção da latitude de SAD69 para SIRGAS2000
+geo.longitude_sirgas2000				-- reprojeção da longitude de SAD69 para SIRGAS2000
+FROM db_bisp_reds_reporting.tb_ocorrencia OCO
+LEFT JOIN db_bisp_reds_reporting.tb_envolvido_ocorrencia ENV ON OCO.numero_ocorrencia = ENV.numero_ocorrencia
+LEFT JOIN db_bisp_reds_master.tb_local_unidade_area_pmmg LO ON OCO.id_local = LO.id_local
+LEFT JOIN db_bisp_reds_master.tb_ocorrencia_setores_geodata AS geo ON OCO.numero_ocorrencia = geo.numero_ocorrencia AND OCO.ocorrencia_uf = 'MG'	-- Tabela de apoio que compara as lat/long com os setores IBGE		
+WHERE 1 = 1      -- Condição sempre verdadeira que serve como ponto inicial para facilitar manutenção da query
+AND EXISTS (                                                           
+-- Predicado que verifica a não existência de registros na subconsulta 
+   SELECT 1                                                              
+   FROM db_bisp_reds_reporting.tb_envolvido_ocorrencia envolvido          
+   WHERE envolvido.numero_ocorrencia = OCO.numero_ocorrencia             
+   AND envolvido.id_envolvimento IN(25,1097, 27, 32, 28, 26, 872)        -- Filtro por códigos específicos de envolvimento -  vítimas
+   AND envolvido.condicao_fisica_codigo <> '0100'                         -- Filtro por condição física difernte de fatal (código '0100')
+   AND envolvido.natureza_ocorrencia_codigo IN('C01157','C01158','C01159') -- Seleção de naturezas do envolvido correspondente ao CV-- removi os crimes para o plano tático 'B01121','B01148','B02001','B01504'
+)                                                                          -- Fim da subconsulta EXISTS - exclui vítima fatal
+AND OCO.data_hora_fato BETWEEN '2025-01-01 00:00:00.000' AND '2026-12-31 23:59:59.000' -- Filtra ocorrências por período específico (todo o ano de 2024 até fevereiro/2025)
+AND OCO.ocorrencia_uf = 'MG'                                                     -- Filtra apenas ocorrências do estado de Minas Gerais
+AND OCO.digitador_sigla_orgao IN ('PM','PC')                              -- Filtro por ocorrências, Polícia Militar ou Polícia Civil
+AND OCO.natureza_codigo IN('C01157','C01158','C01159') -- Seleção de naturezas do CV removi os crimes para o plano tático - 'B01121','B01148','B02001','B01504'
+AND OCO.ind_estado = 'F'                                                         -- Filtra apenas ocorrências fechadas
+AND OCO.unidade_area_militar_nome LIKE '%/18 RPM%'   -- FILTRE PELO NOME DA UNIDADE AREA MILITAR
+ORDER BY  OCO.numero_ocorrencia
